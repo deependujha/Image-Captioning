@@ -1,7 +1,9 @@
 from torchtext.data.utils import get_tokenizer
 from torchtext.vocab import build_vocab_from_iterator
-from typing import Iterable, List
+from typing import Iterable, List, Union
 import pandas as pd
+import torch
+import torch.nn as nn
 
 
 class MyVocab:
@@ -20,6 +22,9 @@ class MyVocab:
         self.special_symbols = ["<unk>", "<pad>", "<bos>", "<eos>"]
         self.tokenizer = get_tokenizer("basic_english")
         self.my_vocab = self._create_vocab(df, column_name)
+
+    def __len__(self):
+        return len(self.my_vocab)
 
     def _create_vocab(self, df: pd.DataFrame, column_name: str = " comment"):
 
@@ -43,7 +48,7 @@ class MyVocab:
         return vocab_transform
 
     def get_token_index_from_sentence(
-        self, sentence: str, max_len: int = 30
+        self, sentences: Union[List[str] | str], max_len: int = 30
     ) -> List[int]:
         """_summary_
         Get the indices of the tokens in the sentence
@@ -55,14 +60,20 @@ class MyVocab:
         Returns:
             List[int]: List of indices
         """
-        tokens = self.tokenizer(sentence)
-        indices = (
-            [self.BOS_IDX] + [self.my_vocab[token] for token in tokens] + [self.EOS_IDX]
-        )
-        indices += [self.PAD_IDX] * (max_len - len(indices))
-        return indices
+        if isinstance(sentences, str):
+            sentences = [sentences]
+        tokens = [self.tokenizer(sentence) for sentence in sentences]
 
-    def get_sentence_from_indices(self, indices: List[int]) -> str:
+        token_indices = []
+        for token in tokens:
+            indices = (
+                [self.BOS_IDX] + [self.my_vocab[tok] for tok in token] + [self.EOS_IDX]
+            )
+            indices += [self.PAD_IDX] * (max_len - len(indices))
+            token_indices.append(indices)
+        return torch.tensor(token_indices)
+
+    def get_sentence_from_indices(self, indices: torch.tensor) -> str:
         """_summary_
         Get the sentence from the indices
 
@@ -72,9 +83,23 @@ class MyVocab:
         Returns:
             str: Sentence
         """
-        tokens = [self.my_vocab.get_itos()[token] for token in indices]
-        tokens = " ".join(tokens)
-        for special_token in self.special_symbols:
-            tokens = tokens.replace(special_token, "")
+        if len(indices.shape) == 1:
+            indices = indices.unsqueeze(0)
+        indices = indices.tolist()
+        all_sentences = []
+        for index in indices:
+            tokens = [self.my_vocab.get_itos()[token] for token in index]
+            tokens = " ".join(tokens)
+            for special_token in self.special_symbols:
+                tokens = tokens.replace(special_token, "")
 
-        return tokens.strip()
+            all_sentences.append(tokens.strip())
+
+        return all_sentences
+
+    def create_padding_mask(self, tgt):
+        tgt_padding_mask = torch.tensor(tgt == self.PAD_IDX, dtype=torch.float32)
+        return tgt_padding_mask
+
+    def create_square_subsequent_mask(self, sz):
+        return nn.Transformer.generate_square_subsequent_mask(sz)
