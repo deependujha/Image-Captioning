@@ -8,27 +8,38 @@ def inference_encoder_decoder_model(encoder_model, decoder_model, image, my_voca
             image = image.unsqueeze(0)
         image = image.to(DEVICE)
         encoder_output = encoder_model(image)
-        # print(f"{encoder_output.shape=}")
-        
-        
-        tgt = torch.tensor([my_vocab.SOS_IDX]).unsqueeze(0).to(DEVICE)
-        for _ in range(max_target_length):
-            my_padding_mask = my_vocab.create_padding_mask(tgt)
-            my_subsequent_mask = my_vocab.create_square_subsequent_mask(
-                tgt.shape[1]
-            )  # max_len
+
+        my_subsequent_mask = my_vocab.create_square_subsequent_mask(
+            max_target_length
+        )  # max_len
+
+        my_caption = [my_vocab.BOS_IDX]
+        for curr_idx in range(max_target_length):
+            padded_tgt = (
+                torch.tensor(
+                    my_caption
+                    + ([my_vocab.PAD_IDX] * (max_target_length - len(my_caption)))
+                )
+                .unsqueeze(0)
+                .to(DEVICE)
+            )
+            my_padding_mask = my_vocab.create_padding_mask(padded_tgt)
+
             final_output = decoder_model(
-                trg=tgt,
+                trg=padded_tgt,
                 memory=encoder_output,
                 tgt_mask=my_subsequent_mask,
                 tgt_key_padding_mask=my_padding_mask,
             )
-            # print(f"{final_output.shape=}")
+
             final_output = final_output.argmax(2)
-            # print(f"{final_output.shape=}")
-            # print(f"{final_output=}")
-            tgt = torch.cat((tgt, final_output[:, -1].unsqueeze(0)), dim=1)
-            # print(f"{tgt.shape=}")
-            if final_output[:, -1].item() == my_vocab.EOS_IDX:
+
+            # update tgt
+            my_caption = my_caption + [final_output[0][curr_idx].item()]
+            # sentence = my_vocab.get_sentence_from_indices(tgt)
+            # print(f"new {sentence=}")
+            if my_caption[-1] == my_vocab.EOS_IDX:
                 break
-        return tgt
+
+        sentence = my_vocab.get_sentence_from_indices(my_caption)
+        return sentence

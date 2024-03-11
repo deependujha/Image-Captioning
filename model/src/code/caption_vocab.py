@@ -73,7 +73,7 @@ class MyVocab:
             token_indices.append(indices)
         return torch.tensor(token_indices)
 
-    def get_sentence_from_indices(self, indices: torch.tensor) -> str:
+    def get_sentence_from_indices(self, indices) -> str:
         """_summary_
         Get the sentence from the indices
 
@@ -83,9 +83,8 @@ class MyVocab:
         Returns:
             str: Sentence
         """
-        if len(indices.shape) == 1:
-            indices = indices.unsqueeze(0)
-        indices = indices.tolist()
+        if isinstance(indices[0],int):
+            indices = [indices]
         all_sentences = []
         for index in indices:
             tokens = [self.my_vocab.get_itos()[token] for token in index]

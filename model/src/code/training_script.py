@@ -11,6 +11,7 @@ from datasets import get_train_test_dataloader
 from vision_transformer_encoder import ViTEncoder
 from caption_generator_decoder import ImageCaptionDecoder
 from train_and_eval_epoch import train_epoch, evaluate
+from inference_script import inference_encoder_decoder_model
 
 
 # ----------------- 2. Define the constants -----------------
@@ -75,25 +76,11 @@ def _my_vocab(my_df: pd.DataFrame, column_name: str = " comment"):
 
 
 if __name__ == "__main__":
-    """Steps:
-    1. Get the train and test dataloaders ✅
-    2. Create and get the vocabulary ✅
-    3. Create the Encoder model ✅
-    4. Create the Decoder model ✅
-    5. Choose the loss function & optimizer for `encoder model parameters` & `decoder model parameters` ✅
-    6. Be able to make one training step and one evaluation step ✅
-    7. Train the model for X epochs ✅
-    """
+
     train_dataloader, test_dataloader, train_df = _my_train_and_test_dataloader()
-    for images, captions in train_dataloader:
-        print(images.shape)
-        print(captions)
-        break
-    print("-" * 80)
+
     my_vocab = _my_vocab(train_df)
-    print(f"{len(my_vocab)=}")
-    print(my_vocab.PAD_IDX, my_vocab.BOS_IDX, my_vocab.EOS_IDX, my_vocab.UNK_IDX)
-    print("-" * 80)
+
     encoder_model = ViTEncoder(
         num_patches=NUM_PATCHES,
         image_size=IMG_SIZE,
@@ -105,13 +92,7 @@ if __name__ == "__main__":
         in_channels=IN_CHANNELS,
         activation=ENCODER_ACTIVATION,
     ).to(DEVICE)
-    random_image = torch.randn(BATCH_SIZE, 3, 224, 224).clip(0, 1).to(DEVICE)
-    print(f"{BATCH_SIZE=}")
-    print(f"{random_image.shape=}")
 
-    print(encoder_model(random_image).shape)  # BATCH_SIZE X (NUM_PATCHES+1) X EMBED_DIM
-    print("-" * 80)
-    print(f"{TGT_VOCAB_SIZE=}")
     decoder_model = ImageCaptionDecoder(
         tgt_vocab_size=TGT_VOCAB_SIZE,
         emb_size=EMBED_DIM,
@@ -120,23 +101,13 @@ if __name__ == "__main__":
         dropout=DROPOUT,
         tgt_max_len=TGT_MAX_LEN,
     ).to(DEVICE)
-    # final_output = my_img_caption_decoder(
-    #     trg=meow_meow,
-    #     memory=dummy_encoder_output,
-    #     tgt_mask=my_subsequent_mask,
-    #     tgt_key_padding_mask=my_padding_mask,
-    # )
-    print(
-        "couldn't run the decoder model as the trg, memory, tgt_mask, tgt_key_padding_mask are not available yet"
-    )
-    print("-" * 80)
+
     loss_fn = torch.nn.NLLLoss(ignore_index=my_vocab.PAD_IDX)
     encoder_optimizer = optim.Adam(encoder_model.parameters(), lr=LEARNING_RATE)
     decoder_optimizer = optim.Adam(decoder_model.parameters(), lr=LEARNING_RATE)
-    print("loss_fn, encoder_optimizer, decoder_optimizer are created")
-    print("-" * 80)
 
     for epoch in range(1, EPOCHS + 1):
+        break
         average_train_batch_loss = train_epoch(
             epoch_num=epoch,
             encoder_model=encoder_model,
@@ -149,7 +120,7 @@ if __name__ == "__main__":
             my_vocab=my_vocab,
             max_target_length=TGT_MAX_LEN,
         )
-        
+
         average_val_batch_loss = evaluate(
             encoder_model=encoder_model,
             decoder_model=decoder_model,
@@ -161,5 +132,15 @@ if __name__ == "__main__":
         )
         print(f"for epoch: {epoch} ==> {average_train_batch_loss=}; {average_val_batch_loss=}")
         print("\n" + "-" * 80 + "\n")
-    print("train_epoch is called")
     print("-" * 80)
+
+    inference_sentence = inference_encoder_decoder_model(
+        encoder_model=encoder_model,
+        decoder_model=decoder_model,
+        image=torch.randn(3, 224, 224),
+        my_vocab=my_vocab,
+        max_target_length=TGT_MAX_LEN,
+        DEVICE=DEVICE,
+    )
+    
+    print(f"{inference_sentence=}")
