@@ -82,8 +82,8 @@ class ViTEncoder(nn.Module):
         num_encoders,
         num_heads,
         dropout,
-        activation,
         in_channels,
+        activation="gelu",
     ):
         super().__init__()
         self.embeddings_block = PatchEmbedding(

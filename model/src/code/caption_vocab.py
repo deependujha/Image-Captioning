@@ -98,7 +98,9 @@ class MyVocab:
         return all_sentences
 
     def create_padding_mask(self, tgt):
-        tgt_padding_mask = torch.tensor(tgt == self.PAD_IDX, dtype=torch.float32)
+        tgt_padding_mask = (
+            (tgt == self.PAD_IDX).type(torch.FloatTensor).clone().detach()
+        )
         return tgt_padding_mask
 
     def create_square_subsequent_mask(self, sz):
