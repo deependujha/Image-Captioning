@@ -72,11 +72,14 @@ class PatchEmbedding(nn.Module):
 
 
 # Vision Transformer Encoder module
-class ViTEncoder(nn.Module):
+class VitEncoder(nn.Module):
+    """_summary_
+    Vision Transformer Encoder module
+    """
+
     def __init__(
         self,
         num_patches,
-        image_size,
         patch_size,
         embed_dim,
         num_encoders,
@@ -103,6 +106,9 @@ class ViTEncoder(nn.Module):
         )
 
     def forward(self, x):
+        """_summary_
+        Forward pass of the Vision Transformer Encoder module
+        """
         x = self.embeddings_block(x)
         x = self.encoder_blocks(x)
 
