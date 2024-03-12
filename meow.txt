@@ -1,0 +1,13 @@
+with embedding size: 768
+--------------------------------------------------------------------------------
+Number of parameters in the encoder model: 33675264
+Number of parameters in the decoder model: 47311901
+Total number of parameters: 80987165
+--------------------------------------------------------------------------------
+
+with embedding size: 256
+--------------------------------------------------------------------------------
+Number of parameters in the encoder model: 8087552
+Number of parameters in the decoder model: 9487389
+Total number of parameters: 17574941
+--------------------------------------------------------------------------------
