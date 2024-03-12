@@ -21,7 +21,7 @@ from inference_script import inference_encoder_decoder_model
 # ----------------- 2. Define the constants -----------------
 
 # RANDOM_SEED = 42
-EPOCHS = 20
+EPOCHS = 5
 
 LEARNING_RATE = 1e-3
 PATCH_SIZE = 16
@@ -40,12 +40,26 @@ TGT_VOCAB_SIZE = 0  # to be updated later
 
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = "mps"
+
 
 DATASETS_DIR = "../../datasets"
 CAPTION_CSV_FILE = f"{DATASETS_DIR}/results.csv"
 IMAGE_DIR = f"{DATASETS_DIR}/flickr30k_images"
 BATCH_SIZE = 4
 
+
+DEVICE = "cpu"
+if torch.cuda.is_available():
+    DEVICE = "cuda"
+elif torch.backends.mps.is_available():
+    DEVICE = "mps"
+else:
+    DEVICE = "cpu"
+
+print("-" * 80)
+print(f"using {DEVICE=}")
+print("-" * 80)
 
 # ----------------- 3. Main Code -----------------
 
@@ -151,7 +165,6 @@ if __name__ == "__main__":
         print(
             f"for epoch: {epoch} ==> {average_train_batch_loss=}; {average_val_batch_loss=}"
         )
-        print_number_of_parameters(encoder_model, decoder_model)
         print("\n" + "-" * 80 + "\n")
     print("-" * 80)
 

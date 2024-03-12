@@ -32,15 +32,12 @@ def train_epoch(
         tgt = my_vocab.get_token_index_from_sentence(tgt, max_len=max_target_length).to(
             DEVICE
         )
-        my_padding_mask = my_vocab.create_padding_mask(tgt)
+        my_padding_mask = my_vocab.create_padding_mask(tgt).to(DEVICE)
         my_subsequent_mask = my_vocab.create_square_subsequent_mask(
             max_target_length
+        ).to(
+            DEVICE
         )  # max_len
-
-        # print(f"{src.shape=}")
-        # print(f"{tgt.shape=}")
-        # print(f"{my_padding_mask.shape=}")
-        # print(f"{my_subsequent_mask.shape=}")
 
         encoder_output = encoder_model(src)
         # print(f"{encoder_output.shape=}")
@@ -84,7 +81,6 @@ def evaluate(
 ):
     encoder_model.eval()
     decoder_model.eval()
-
     losses = 0
 
     for src, tgt in val_dataloader:
@@ -92,9 +88,11 @@ def evaluate(
         tgt = my_vocab.get_token_index_from_sentence(tgt, max_len=max_target_length).to(
             DEVICE
         )
-        my_padding_mask = my_vocab.create_padding_mask(tgt)
+        my_padding_mask = my_vocab.create_padding_mask(tgt).to(DEVICE)
         my_subsequent_mask = my_vocab.create_square_subsequent_mask(
             max_target_length
+        ).to(
+            DEVICE
         )  # max_len
 
         encoder_output = encoder_model(src)

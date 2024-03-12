@@ -11,7 +11,7 @@ def inference_encoder_decoder_model(encoder_model, decoder_model, image, my_voca
 
         my_subsequent_mask = my_vocab.create_square_subsequent_mask(
             max_target_length
-        )  # max_len
+        ).to(DEVICE)  # max_len
 
         my_caption = [my_vocab.BOS_IDX]
         for curr_idx in range(max_target_length):
@@ -23,7 +23,7 @@ def inference_encoder_decoder_model(encoder_model, decoder_model, image, my_voca
                 .unsqueeze(0)
                 .to(DEVICE)
             )
-            my_padding_mask = my_vocab.create_padding_mask(padded_tgt)
+            my_padding_mask = my_vocab.create_padding_mask(padded_tgt).to(DEVICE)
 
             final_output = decoder_model(
                 trg=padded_tgt,
