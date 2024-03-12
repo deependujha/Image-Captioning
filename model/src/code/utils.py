@@ -6,20 +6,23 @@ import os
 import torch
 
 
-def save_model(model, model_dir, is_distributed, logger):
+def save_model(model_dir, encoder_model, decoder_model, vocab, logger):
     """_summary_
     Saves the model to the specified directory.
     """
-    logger.info("Saving the model.")
-    path = os.path.join(model_dir, "model.pth")
 
-    if is_distributed:
-        # model now refers to the DistributedDataParallel (DDP) object
-        # which is a wrapper around the model you passed to it
-        # to get the original model, you can use `model.module`
-        torch.save(model.module.state_dict(), path)
-    else:
-        torch.save(model.state_dict(), path)
+    # model now refers to the DistributedDataParallel (DDP) object
+    # which is a wrapper around the model you passed to it
+    # to get the original model, you can use `model.module`
+    my_model_dict = {
+        "encoder_model": encoder_model.module.state_dict(),
+        "decoder_model": decoder_model.module.state_dict(),
+        "vocab": vocab,
+    }
+    logger.info("Saving the model.")
+    path = os.path.join(model_dir, "model.pt")
+
+    torch.save(my_model_dict, path)
 
 
 def count_parameters(model):

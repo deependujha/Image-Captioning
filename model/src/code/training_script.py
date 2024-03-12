@@ -2,6 +2,27 @@
 Main training script for image-captioning model
 """
 
+import argparse
+import json
+import logging
+import os
+import sys
+
+# SageMaker data parallel: Import the library PyTorch API
+import smdistributed.dataparallel.torch.torch_smddp
+
+# SageMaker data parallel: Import PyTorch's distributed API
+import torch.distributed as dist
+
+# SageMaker data parallel: Initialize the process group
+dist.init_process_group(backend="smddp")
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(logging.StreamHandler(sys.stdout))
+
+# ------------------------------------------------------------------
+
 import torch
 import torch.optim as optim
 import pandas as pd
@@ -10,8 +31,8 @@ from sklearn.model_selection import train_test_split
 
 # ----------------- 1. Import the necessary modules -----------------
 from caption_vocab import MyVocab
-from utils import count_parameters
-from datasets import get_train_test_dataloader
+from utils import count_parameters, save_model
+from datasets import get_train_test_dataset, get_train_test_dataloader
 from vision_transformer_encoder import VitEncoder
 from caption_generator_decoder import ImageCaptionDecoder
 from train_and_eval_epoch import train_epoch, evaluate
@@ -21,9 +42,7 @@ from inference_script import inference_encoder_decoder_model
 # ----------------- 2. Define the constants -----------------
 
 # RANDOM_SEED = 42
-EPOCHS = 5
 
-LEARNING_RATE = 1e-3
 PATCH_SIZE = 16
 IMG_SIZE = 224
 IN_CHANNELS = 3
@@ -39,41 +58,39 @@ TGT_MAX_LEN = 20  # maximum length of the target sequence
 TGT_VOCAB_SIZE = 0  # to be updated later
 
 
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-DEVICE = "mps"
-
-
-DATASETS_DIR = "../../datasets"
-CAPTION_CSV_FILE = f"{DATASETS_DIR}/results.csv"
-IMAGE_DIR = f"{DATASETS_DIR}/flickr30k_images"
-BATCH_SIZE = 4
-
-
-DEVICE = "cpu"
-if torch.cuda.is_available():
-    DEVICE = "cuda"
-elif torch.backends.mps.is_available():
-    DEVICE = "mps"
-else:
-    DEVICE = "cpu"
-
 print("-" * 80)
-print(f"using {DEVICE=}")
+# SM DDP only supports GPU-only training
+DEVICE = torch.device("cuda")
 print("-" * 80)
 
 # ----------------- 3. Main Code -----------------
 
 
-def _my_train_and_test_dataloader():
+def _my_train_and_test_dataloader(_datasets_dir, batch_size):
     """
     Function to get the train and test dataloaders
     """
-    df = pd.read_csv(CAPTION_CSV_FILE, delimiter="|")
+    caption_csv_file = f"{_datasets_dir}/results.csv"
+    image_dir = f"{_datasets_dir}/flickr30k_images"
+
+    df = pd.read_csv(caption_csv_file, delimiter="|")
     _train_df, _test_df = train_test_split(df, test_size=0.02, random_state=42)
 
-    train_loader, test_loader = get_train_test_dataloader(
-        _train_df, _test_df, IMAGE_DIR, batch_size=BATCH_SIZE
+    train_dataset, test_dataset = get_train_test_dataset(_train_df, _test_df, image_dir)
+
+    # train_sampler
+    # SageMaker data parallel: Set num_replicas and rank in DistributedSampler
+    train_sampler = torch.utils.data.distributed.DistributedSampler(
+        train_dataset, num_replicas=dist.get_world_size(), rank=dist.get_rank()
     )
+
+    train_loader, test_loader = get_train_test_dataloader(
+        train_dataset=train_dataset,
+        test_dataset=test_dataset,
+        batch_size=batch_size,
+        train_sampler=train_sampler,
+    )
+
     return (
         train_loader,
         test_loader,
@@ -109,9 +126,19 @@ def print_number_of_parameters(_encoder_model, _decoder_model):
     print("-" * 80)
 
 
-if __name__ == "__main__":
+def orchestrator(args):
+    my_world_size = dist.get_world_size()
+    logger.info(
+        f"Initialized the distributed environment: '{args.backend}' backend on {my_world_size} nodes."
+    )
 
-    train_dataloader, test_dataloader, train_df = _my_train_and_test_dataloader()
+    # SageMaker data parallel: Scale batch size by world size
+    batch_size = args.batch_size // dist.get_world_size()
+    batch_size = max(batch_size, 1)
+
+    train_dataloader, test_dataloader, train_df = _my_train_and_test_dataloader(
+        args.data_dir, batch_size
+    )
 
     my_vocab, TGT_VOCAB_SIZE = _my_vocab(train_df)
 
@@ -135,11 +162,21 @@ if __name__ == "__main__":
         tgt_max_len=TGT_MAX_LEN,
     ).to(DEVICE)
 
-    loss_fn = torch.nn.NLLLoss(ignore_index=my_vocab.PAD_IDX)
-    encoder_optimizer = optim.Adam(encoder_model.parameters(), lr=LEARNING_RATE)
-    decoder_optimizer = optim.Adam(decoder_model.parameters(), lr=LEARNING_RATE)
+    # SageMaker data parallel: Wrap the PyTorch model with the library's DDP
+    encoder_model = torch.nn.parallel.DistributedDataParallel(encoder_model)
+    decoder_model = torch.nn.parallel.DistributedDataParallel(decoder_model)
 
-    for epoch in range(1, EPOCHS + 1):
+    # SageMaker data parallel: Pin each GPU to a single library process.
+    local_rank = os.environ["LOCAL_RANK"]
+    torch.cuda.set_device(int(local_rank))
+    encoder_model.cuda(int(local_rank))
+    decoder_model.cuda(int(local_rank))
+
+    loss_fn = torch.nn.NLLLoss(ignore_index=my_vocab.PAD_IDX)
+    encoder_optimizer = optim.Adam(encoder_model.parameters(), lr=args.lr)
+    decoder_optimizer = optim.Adam(decoder_model.parameters(), lr=args.lr)
+
+    for epoch in range(1, args.epochs + 1):
         average_train_batch_loss = train_epoch(
             epoch_num=epoch,
             encoder_model=encoder_model,
@@ -167,16 +204,52 @@ if __name__ == "__main__":
         )
         print("\n" + "-" * 80 + "\n")
     print("-" * 80)
+    print_number_of_parameters(encoder_model, decoder_model)
+    print("-" * 80)
+    logger.info("Saving trained model only on rank 0")
+    # SageMaker data parallel: Save model on master node.
+    if dist.get_rank() == 0:
+        save_model(
+            model_dir=args.model_dir,
+            encoder_model=encoder_model,
+            decoder_model=decoder_model,
+            vocab=my_vocab,
+            logger=logger,
+        )
 
-    inference_sentence = inference_encoder_decoder_model(
-        encoder_model=encoder_model,
-        decoder_model=decoder_model,
-        image=torch.randn(3, 224, 224),
-        my_vocab=my_vocab,
-        max_target_length=TGT_MAX_LEN,
-        DEVICE=DEVICE,
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+
+    # PyTorch environments
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=64,
+        help="input batch size for training (default: 64)",
+    )
+    parser.add_argument(
+        "--epochs", type=int, default=10, help="number of epochs to train (default: 10)"
+    )
+    parser.add_argument(
+        "--lr", type=float, default=0.001, help="learning rate (default: 0.01)"
+    )
+    parser.add_argument(
+        "--backend",
+        type=str,
+        default="smddp",
+        help="backend for dist. training, this script only supports gloo",
     )
 
-    print(f"{inference_sentence=}")
-    print_number_of_parameters(encoder_model, decoder_model)
-    print("Done!")
+    # SageMaker environment
+    parser.add_argument(
+        "--hosts", type=list, default=json.loads(os.environ["SM_HOSTS"])
+    )
+    parser.add_argument(
+        "--current-host", type=str, default=os.environ["SM_CURRENT_HOST"]
+    )
+    parser.add_argument("--model-dir", type=str, default=os.environ["SM_MODEL_DIR"])
+    parser.add_argument("--data-dir", type=str, default=os.environ["SM_CHANNEL_TRAIN"])
+
+    orchestrator(parser.parse_args())

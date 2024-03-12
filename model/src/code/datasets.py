@@ -15,7 +15,6 @@ Usage:
 ```
 """
 
-
 import os
 from PIL import Image
 
@@ -67,7 +66,7 @@ class CustomImageDataset(Dataset):
         return image, image_caption
 
 
-def get_train_test_dataloader(train_df, test_df, img_dir, batch_size):
+def get_train_test_dataset(train_df, test_df, img_dir):
     train_dataset = CustomImageDataset(
         annotations_dataframe=train_df,
         img_dir=img_dir,
@@ -82,8 +81,18 @@ def get_train_test_dataloader(train_df, test_df, img_dir, batch_size):
         target_transform=None,
     )
 
+    return train_dataset, test_dataset
+
+
+def get_train_test_dataloader(
+    train_dataset, test_dataset, batch_size, train_sampler=None
+):
+
     train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=train_sampler is None,
+        sampler=train_sampler,
     )
 
     test_dataloader = torch.utils.data.DataLoader(
