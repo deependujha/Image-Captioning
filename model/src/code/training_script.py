@@ -73,7 +73,7 @@ def _my_train_and_test_dataloader(_datasets_dir, batch_size):
     caption_csv_file = f"{_datasets_dir}/results.csv"
     image_dir = f"{_datasets_dir}/flickr30k_images"
 
-    df = pd.read_csv(caption_csv_file, delimiter="|")
+    df = pd.read_csv(caption_csv_file)
     _train_df, _test_df = train_test_split(df, test_size=0.02, random_state=42)
 
     train_dataset, test_dataset = get_train_test_dataset(_train_df, _test_df, image_dir)
@@ -98,7 +98,7 @@ def _my_train_and_test_dataloader(_datasets_dir, batch_size):
     )  # train_df is required to get the vocabulary
 
 
-def _my_vocab(my_df: pd.DataFrame, column_name: str = " comment"):
+def _my_vocab(my_df: pd.DataFrame, column_name: str = "comment"):
     """
     Function to get the vocabulary and tokenizer
     """
@@ -203,12 +203,12 @@ def orchestrator(args):
             f"for epoch: {epoch} ==> {average_train_batch_loss=}; {average_val_batch_loss=}"
         )
         print("\n" + "-" * 80 + "\n")
-    print("-" * 80)
-    print_number_of_parameters(encoder_model, decoder_model)
-    print("-" * 80)
-    logger.info("Saving trained model only on rank 0")
     # SageMaker data parallel: Save model on master node.
     if dist.get_rank() == 0:
+        print("-" * 80)
+        print_number_of_parameters(encoder_model, decoder_model)
+        print("-" * 80)
+        logger.info("Saving trained model only on rank 0")
         save_model(
             model_dir=args.model_dir,
             encoder_model=encoder_model,

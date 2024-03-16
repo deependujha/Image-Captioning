@@ -69,7 +69,10 @@ class MyVocab:
             indices = (
                 [self.BOS_IDX] + [self.my_vocab[tok] for tok in token] + [self.EOS_IDX]
             )
-            indices += [self.PAD_IDX] * (max_len - len(indices))
+            if len(indices) < max_len:
+                indices += [self.PAD_IDX] * (max_len - len(indices))
+            else:
+                indices = indices[:max_len]
             token_indices.append(indices)
         return torch.tensor(token_indices)
 
@@ -83,7 +86,7 @@ class MyVocab:
         Returns:
             str: Sentence
         """
-        if isinstance(indices[0],int):
+        if isinstance(indices[0], int):
             indices = [indices]
         all_sentences = []
         for index in indices:

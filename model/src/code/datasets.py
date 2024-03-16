@@ -28,7 +28,7 @@ train_transform = v2.Compose(
         v2.PILToTensor(),
         v2.Resize(size=(224, 224), antialias=True),
         v2.RandomHorizontalFlip(p=0.5),
-        v2.ToDtype(torch.float32, scale=True),
+        v2.ToDtype(torch.float32),
     ]
 )
 
@@ -36,7 +36,7 @@ test_transform = v2.Compose(
     [
         v2.PILToTensor(),
         v2.Resize(size=(224, 224), antialias=True),
-        v2.ToDtype(torch.float32, scale=True),
+        v2.ToDtype(torch.float32),
     ]
 )
 

@@ -61,7 +61,7 @@ def train_epoch(
         losses += loss.item()
         last_thousand_losses += loss.item()
 
-        if data_seen_so_far >= 2:
+        if data_seen_so_far >= 1000:
             data_seen_so_far = 0
             avg_last_thousand_losses = last_thousand_losses / 1000
             last_thousand_losses = 0
