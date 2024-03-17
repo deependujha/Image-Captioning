@@ -19,7 +19,7 @@ NUM_DECODERS = 6
 EMBED_DIM = 768  # embedding dimension
 NUM_PATCHES = (IMG_SIZE // PATCH_SIZE) ** 2  # 196
 TGT_MAX_LEN = 20  # maximum length of the target sequence
-TGT_VOCAB_SIZE = 0  # to be updated later
+TGT_VOCAB_SIZE = 20069  # to be updated later
 
 
 def inference_encoder_decoder_model(
@@ -78,11 +78,11 @@ def inference_encoder_decoder_model(
 # - output_fn
 
 
-def model_fn(model_dir):
+def model_fn(model_dir, context=None):
     print(f"loading model for inference from {model_dir=}")
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-    encoder_model = VitEncoder(
+    _encoder_model = VitEncoder(
         num_patches=NUM_PATCHES,
         patch_size=PATCH_SIZE,
         embed_dim=EMBED_DIM,
@@ -93,7 +93,7 @@ def model_fn(model_dir):
         activation=ENCODER_ACTIVATION,
     ).to(DEVICE)
 
-    decoder_model = ImageCaptionDecoder(
+    _decoder_model = ImageCaptionDecoder(
         tgt_vocab_size=TGT_VOCAB_SIZE,
         emb_size=EMBED_DIM,
         nhead=NUM_HEADS,
@@ -104,14 +104,15 @@ def model_fn(model_dir):
 
     with open(os.path.join(model_dir, "model.pt"), "rb") as f:
         model = torch.load(f, map_location=DEVICE)
-        encoder_model.load_state_dict(model["encoder"], device=DEVICE)
-        decoder_model.load_state_dict(model["decoder"], device=DEVICE)
-        vocab = model["vocab"]
+        # print(f"{type(model)=}; {model.keys()=}")
+        _encoder_model.load_state_dict(model["encoder_model"])
+        _decoder_model.load_state_dict(model["decoder_model"])
+        _vocab = model["vocab"]
 
-    return encoder_model, decoder_model, vocab
+    return _encoder_model, _decoder_model, _vocab
 
 
-def predict_fn(input_data, model, context):
+def predict_fn(input_data, model, context=None):
     print(f"predicting on input data {input_data.shape=}")
     device = torch.device(
         "cuda:" + str(context.system_properties.get("gpu_id"))
@@ -122,14 +123,15 @@ def predict_fn(input_data, model, context):
     encoder_model = model[0].to(device)
     decoder_model = model[1].to(device)
     my_vocab = model[2]
-    inference_encoder_decoder_model(
+    return inference_encoder_decoder_model(
         encoder_model=encoder_model,
         decoder_model=decoder_model,
         image=input_data,
         my_vocab=my_vocab,
+        DEVICE=device,
     )
 
 
-def output_fn(prediction, context):
+def output_fn(prediction, context=None):
     print("all done, returning output")
     return prediction
