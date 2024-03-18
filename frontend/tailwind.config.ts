@@ -19,6 +19,8 @@ const config: Config = {
         third: "moveInCircle 40s linear infinite",
         fourth: "moveHorizontal 40s ease infinite",
         fifth: "moveInCircle 20s ease infinite",
+        shimmer: "shimmer 2s linear infinite",
+
       },
       keyframes: {
         moveHorizontal: {
@@ -52,6 +54,14 @@ const config: Config = {
           },
           "100%": {
             transform: "translateY(-50%)",
+          },
+        },
+        shimmer: {
+          from: {
+            backgroundPosition: "0 0",
+          },
+          to: {
+            backgroundPosition: "-200% 0",
           },
         },
       },
