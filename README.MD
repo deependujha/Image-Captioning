@@ -16,6 +16,8 @@
 
 - Total number of parameters: 111788645
 
+- [Check out a detailed thread on this project](https://twitter.com/deependu__/status/1772598553757507758)
+
 ---
 
 ## Distributed training backpropagation
