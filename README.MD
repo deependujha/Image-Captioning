@@ -4,6 +4,12 @@
 
 ---
 
+## Description
+
+![architecture](./assets/architecture.jpeg)
+
+- Model trained on dataset of size 9 GB+
+
 - Number of parameters in the encoder model: 33675264
 
 - Number of parameters in the decoder model: 78113381
